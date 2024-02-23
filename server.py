@@ -26,67 +26,90 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     # ex: HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found"
 
     def handle_get(self, request):
-        to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: TYPE\r\nContent-Length: LEN\r\n\r\n"
-
         # TODO add the len of the BODY and the THING to the string and then encode it
 
         if request.path == "/":
-            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/html\r\nContent-Length: LEN\r\n\r\n"
+            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: LEN\r\n\r\n"
             with open("public/index.html") as f:
                 data = f.read()
                 e_data = data.encode()
                 length = len(e_data)
-                to_send.replace("LEN", length.__str__())
-                send = to_send.encode()
+                ret_send = to_send.replace("LEN", length.__str__())
+                send = ret_send.encode()
                 return send + e_data
 
         elif request.path.__contains__(".css"):
+            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/css\r\nContent-Length: LEN\r\n\r\n"
+            path = "public/style.css"
             mime = "text/css"
-            return handle_type(self, request.path, mime, to_send)
+            with open("public/style.css") as f:
+                data = f.read()
+                e_data = data.encode()
+                length = len(e_data)
+                ret_send = to_send.replace("LEN", length.__str__())
+                send = ret_send.encode()
+                return send + e_data
 
-        elif request.path.__contains__(".js"):
-            mime = "text/javascript"
-            return handle_type(self, request.path, mime, to_send)
+        elif request.path.__contains__("functions.js"):
+            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/javascript\r\nContent-Length: LEN\r\n\r\n"
+            with open("public/functions.js") as f:
+                data = f.read()
+                e_data = data.encode()
+                length = len(e_data)
+                ret_send = to_send.replace("LEN", length.__str__())
+                send = ret_send.encode()
+                return send + e_data
+
+        elif request.path.__contains__("webrtc.js"):
+            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/javascript\r\nContent-Length: LEN\r\n\r\n"
+            with open("public/webrtc.js") as f:
+                data = f.read()
+                e_data = data.encode()
+                length = len(e_data)
+                ret_send = to_send.replace("LEN", length.__str__())
+                send = ret_send.encode()
+                return send + e_data
 
         elif request.path.__contains__(".ico"):
-            mime = "image/ico"
-            return handle_type(self, request.path, mime, to_send)
+            mime = "image/x-icon"
+            return handle_byte(self, request.path, mime)
 
-        elif request.path.__contains__("/public/image/"):
+        elif request.path.__contains__("public/image"):
             mime = "image/jpeg"
-            return handle_byte(self, request.path, mime, to_send)
+            return handle_byte(self, request.path, mime)
 
         else:
             return not_found()
 
 
-def handle_type(self, path, mimetype, to_send: str):
-    paths = path.split("/")
-    file_name = tail(paths)
-    n_path = "public/" + file_name
+def handle_byte(self, path, mimetype):
+    to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: TYPE\r\nContent-Length: LEN\r\n\r\n"
 
-    to_send.replace("TYPE", mimetype, 1)
-    with open(n_path) as f:
-        data = f.read()
-        e_data = data.encode()
-        length = len(e_data)
-        to_send.replace("LEN", length.__str__())
-        e_to_send = to_send.encode()
+    if path.__contains__(".ico"):
+        paths = path.split("/")
+        file_name = tail(paths)
+        n_path = "public/" + file_name
 
-        return e_to_send + e_data
+        to_send.replace("TYPE", mimetype, 1)
+        with open(n_path, "rb") as f:
+            data = f.read()
+            length = len(data)
+            ret_send = to_send.replace("LEN", length.__str__())
+            e_to_send = ret_send.encode()
 
+            return e_to_send + data
 
-def handle_byte(self, path, mimetype, to_send: str):
     paths = path.split("/")
     file_name = tail(paths)
     n_path = "public/image/" + file_name
+    print("path = " + n_path)
 
     to_send.replace("TYPE", mimetype, 1)
-    with open(n_path, "b") as f:
+    with open(n_path, "rb") as f:
         data = f.read()
         length = len(data)
-        to_send.replace("LEN", length.__str__())
-        e_to_send = to_send.encode()
+        ret_send = to_send.replace("LEN", length.__str__())
+        e_to_send = ret_send.encode()
 
         return e_to_send + data
 
