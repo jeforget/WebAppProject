@@ -26,12 +26,35 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     # ex: HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found"
 
     def handle_get(self, request):
-        # TODO add the len of the BODY and the THING to the string and then encode it
+
+        # check for cookies
+        # if this is the first time loading, I need to set the cookie for the first time
 
         if request.path == "/":
-            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: LEN\r\n\r\n"
+
+            if not (request.cookies.__contains__("visits")):
+                to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: LEN\r\nSet-Cookie: visits=1; Max-Age=3600\r\n\r\n"
+                visits = 1
+                strvist = "1"
+                first = True
+
+            else:
+                visits_str = request.cookies.get("visits")
+
+                if visits_str.__contains__(":"):
+                    visits_arr = visits_str.split(":")
+                    visits_str = visits_arr[0]
+
+                visits_int = int(visits_str)
+                visits_int += 1
+                strvist = visits_int.__str__()
+                tosend = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: LEN\r\nSet-Cookie: visits=1; Max-Age=3600\r\n\r\n"
+                to_send = tosend.replace("visits=1", "visits=" + strvist)
+                first = False
+
             with open("public/index.html") as f:
                 data = f.read()
+                data = data.replace("{{visits}}", strvist)
                 e_data = data.encode()
                 length = len(e_data)
                 ret_send = to_send.replace("LEN", length.__str__())
@@ -71,40 +94,40 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 return send + e_data
 
         elif request.path.__contains__(".ico"):
-            mime = "image/x-icon"
-            return handle_byte(self, request.path, mime)
+            return handle_ico(self, request.path)
 
         elif request.path.__contains__("public/image"):
-            mime = "image/jpeg"
-            return handle_byte(self, request.path, mime)
+            return handle_jpeg(self, request.path)
 
         else:
             return not_found()
 
 
-def handle_byte(self, path, mimetype):
-    to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: TYPE\r\nContent-Length: LEN\r\n\r\n"
-
-    if path.__contains__(".ico"):
-        paths = path.split("/")
-        file_name = tail(paths)
-        n_path = "public/" + file_name
-
-        to_send.replace("TYPE", mimetype, 1)
-        with open(n_path, "rb") as f:
-            data = f.read()
-            length = len(data)
-            ret_send = to_send.replace("LEN", length.__str__())
-            e_to_send = ret_send.encode()
-
-            return e_to_send + data
+def handle_jpeg(self, path):
+    to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: image/jpeg\r\nContent-Length: LEN\r\n\r\n"
 
     paths = path.split("/")
     file_name = tail(paths)
     n_path = "public/image/" + file_name
-    print("path = " + n_path)
 
-    to_send.replace("TYPE", mimetype, 1)
+    if file_name != "cat.jpg" and file_name != "dog.jpg" and file_name != "eagle.jpg" and file_name != "elephant.jpg" and file_name != "elephant-small.jpg" and file_name != "flamingo.jpg" and file_name != "kitten.jpg":
+        return not_found()
+
+    with open(n_path, "rb") as f:
+        data = f.read()
+        length = len(data)
+        ret_send = to_send.replace("LEN", length.__str__())
+        e_to_send = ret_send.encode()
+
+        return e_to_send + data
+
+def handle_ico(self,path):
+    to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: image/x-icon\r\nContent-Length: LEN\r\n\r\n"
+
+    paths = path.split("/")
+    file_name = tail(paths)
+    n_path = "public/" + file_name
+
     with open(n_path, "rb") as f:
         data = f.read()
         length = len(data)
