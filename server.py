@@ -1,5 +1,10 @@
+import array
+import json
+import random
 import socketserver
 from util.request import Request
+from pymongo import MongoClient
+import uuid
 
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
@@ -19,7 +24,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.request.sendall(send_me)
             return
         elif request.method == "POST":
-            not_found()
+            send_me = self.handle_post(request)
+            self.request.sendall(send_me)
         else:
             not_found()
 
@@ -99,8 +105,45 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         elif request.path.__contains__("public/image"):
             return handle_jpeg(self, request.path)
 
+        elif request.path == "/chat-messages":
+            to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: application/json\r\nContent-Length: LEN\r\n\r\n"
+            # taken right from the slides
+            mongo_client = MongoClient("mongo")
+            db = mongo_client["cse312"]
+            chat_collection = db["chat"]
+            all_data = list(chat_collection.find({}, {"_id": 0}))
+            print(all_data)
+            json_data = json.dumps(all_data)
+            e_json = json_data.encode()
+            j_len = len(e_json)
+            send = to_send.replace("LEN", j_len.__str__())
+            add_to = send.encode()
+
+            return add_to + e_json
+
+
         else:
             return not_found()
+
+    def handle_post(self, request):
+        if request.path == "/chat-messages":
+            mongo_client = MongoClient("mongo")
+            db = mongo_client["cse312"]
+            chat_collection = db["chat"]
+
+            # process the body
+            body = request.body.decode()
+            message_data = json.loads(body)
+            # esc_data = escape(message_data)
+            mesg = message_data.get("message")
+            escp_msg = escape(mesg)
+            uid = uuid.uuid4()
+            chat_collection.insert_one({"message": escp_msg, "username": "guest", "id": uid.__str__()})
+            print(message_data)
+            return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+        else:
+            print("that can't be right...")
+            return
 
 
 def handle_jpeg(self, path):
@@ -121,7 +164,8 @@ def handle_jpeg(self, path):
 
         return e_to_send + data
 
-def handle_ico(self,path):
+
+def handle_ico(self, path):
     to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: image/x-icon\r\nContent-Length: LEN\r\n\r\n"
 
     paths = path.split("/")
@@ -147,6 +191,13 @@ def tail(t_list):
 def not_found():
     not_found = "HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found"
     return not_found.encode()
+
+
+def escape(string: str):
+    string_and = string.replace("&", "&amp")
+    string_great = string_and.replace(">", "&gt")
+    string_less = string_great.replace("<", "&lt")
+    return string_less
 
 
 def main():
