@@ -112,7 +112,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             db = mongo_client["cse312"]
             chat_collection = db["chat"]
             all_data = list(chat_collection.find({}, {"_id": 0}))
-            print(all_data)
+            #print(all_data)
             json_data = json.dumps(all_data)
             e_json = json_data.encode()
             j_len = len(e_json)
@@ -139,7 +139,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             escp_msg = escape(mesg)
             uid = uuid.uuid4()
             chat_collection.insert_one({"message": escp_msg, "username": "guest", "id": uid.__str__()})
-            print(message_data)
+            #print(message_data)
             return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
         else:
             print("that can't be right...")
