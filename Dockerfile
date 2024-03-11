@@ -1,4 +1,4 @@
-#taken from "1_5_Docker" slides
+# Taken from "1_5_Docker" slides
 FROM python:3.8
 ENV HOME /root
 WORKDIR /root
