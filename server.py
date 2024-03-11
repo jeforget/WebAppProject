@@ -172,7 +172,7 @@ def handle_ico(self, path):
     file_name = tail(paths)
     n_path = "public/" + file_name
 
-    with open(n_path, "rb") as f:
+    with open("public/favicon.ico", "rb") as f:
         data = f.read()
         length = len(data)
         ret_send = to_send.replace("LEN", length.__str__())
