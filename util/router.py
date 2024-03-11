@@ -166,13 +166,13 @@ def handle_post_chat(request: Request):
 
 class Router:
     def __init__(self):
-        # self.get is a list of tuples in this format: (Method, Path, func)
+        # self.get is a list of tuples in this format: (Method, Path, Function)
         self.get = []
 
-        # self.post is a list of tuples in this format: (Method, Path, func)
+        # self.post is a list of tuples in this format: (Method, Path, Function)
         self.post = []
 
-# A function that adds all of my routes for me
+    # A function that adds all of my routes for me
     def add_all_routes(self):
         self.add_route("GET", "^/public/style.css$", handle_css)
         self.add_route("GET", "^/public/functions.js$", handle_f_js)
@@ -201,10 +201,17 @@ class Router:
             # For every tuple in self.get:
             for x in self.get:
                 # If the re expression matches the path given, return the byte array from the function
+                # The tuple is formatted as (Method, Path, Function), so x[1] is the path and x[2] is the function.
+
+                # I had this as just "if re.match(x[1], req.path):" originally,
+                # but re.match seems to return None if it doesn't match, so I set it to != None,
+                # and then pyCharm suggested I use "is not" instead.
                 if re.match(x[1], req.path) is not None:
                     return x[2](req)
+
             # If you've gotten this far, that means it's not in there so just return an encoded 404
             return not_found(req)
+
         # If the method of the request is post, look into self.post
         elif req.method == "POST":
             # For every tuple in self.post:
@@ -214,9 +221,11 @@ class Router:
                     return x[2](req)
             # If you've gotten this far, that means it's not in there so just return an encoded 404
             return not_found(req)
+
         # This router only handles post and get, anything else is just a 404
         else:
             return not_found(req)
+
 
 # Simple test with GET, and "/"
 def test1():
@@ -227,6 +236,7 @@ def test1():
     route = r.route_request(request)
     print(route)
 
+
 # Simple test with GET and an image
 def test2():
     request = Request(
@@ -236,6 +246,7 @@ def test2():
     r.add_all_routes()
     route = r.route_request(request)
     print(route)
+
 
 # Simple test with POST and a chat message
 def test3():
