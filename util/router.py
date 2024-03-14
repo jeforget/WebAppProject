@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from util.request import Request
+from request import Request
 import re
 import uuid
 import json
@@ -7,8 +7,7 @@ import json
 
 # Just return an encoded 404 response
 def not_found(req: Request):
-    not_f = "HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found"
-    return not_f.encode()
+    return b'HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found'
 
 
 def handle_get_chat(req: Request):
@@ -161,7 +160,7 @@ def handle_post_chat(request: Request):
         # print(message_data)
         return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
     else:
-        return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+        return not_found(request)
 
 
 class Router:
@@ -198,29 +197,42 @@ class Router:
 
         # If the method of the request is get, look into self.get
         if req.method == "GET":
-            # For every tuple in self.get:
-            for x in self.get:
-                # If the re expression matches the path given, return the byte array from the function
-                # The tuple is formatted as (Method, Path, Function), so x[1] is the path and x[2] is the function.
 
-                # I had this as just "if re.match(x[1], req.path):" originally,
-                # but re.match seems to return None if it doesn't match, so I set it to != None,
-                # and then pyCharm suggested I use "is not" instead.
-                if re.match(x[1], req.path) is not None:
-                    return x[2](req)
+            # Perhaps it's getting an error bc it's iterating through an emtpy list?
+            if len(self.get) > 0:
+                # For every tuple in self.get:
+                for x in self.get:
+                    # If the re expression matches the path given, return the byte array from the function
+                    # The tuple is formatted as (Method, Path, Function), so x[1] is the path and x[2] is the function.
 
-            # If you've gotten this far, that means it's not in there so just return an encoded 404
-            return not_found(req)
+                    # I had this as just "if re.match(x[1], req.path):" originally,
+                    # but re.match seems to return None if it doesn't match, so I set it to != None,
+                    # and then pyCharm suggested I use "is not" instead.
+                    if re.match(x[1], req.path) is not None:
+                        return x[2](req)
+
+                # If you've gotten this far, that means it's not in there so just return an encoded 404
+                return not_found(req)
+            else:
+                #if it's empty just return a 404
+                return not_found(req)
 
         # If the method of the request is post, look into self.post
         elif req.method == "POST":
-            # For every tuple in self.post:
-            for x in self.post:
-                # If the re expression matches the path given, return the byte array from the function
-                if re.match(x[1], req.path) is not None:
-                    return x[2](req)
-            # If you've gotten this far, that means it's not in there so just return an encoded 404
-            return not_found(req)
+
+            # Perhaps it's getting an error bc it's iterating through an emtpy list?
+            if len(self.post) > 0:
+
+                # For every tuple in self.post:
+                for x in self.post:
+                    # If the re expression matches the path given, return the byte array from the function
+                    if re.match(x[1], req.path) is not None:
+                        return x[2](req)
+                # If you've gotten this far, that means it's not in there so just return an encoded 404
+                return not_found(req)
+            else:
+                #if it's empty just return a 404
+                return not_found(req)
 
         # This router only handles post and get, anything else is just a 404
         else:
@@ -233,6 +245,7 @@ def test1():
         b'GET / HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nPragma: no-cache\r\nCache-Control: no-cache\r\nsec-ch-ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"\r\nsec-ch-ua-mobile: ?0\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\r\nsec-ch-ua-platform: "macOS"\r\nAccept: */*\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Dest: empty\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; visits=6\r\n\r\nHelloWorld')
     r = Router()
     r.add_all_routes()
+    r.add_route("GET", "^/public/style.css$", handle_css)
     route = r.route_request(request)
     print(route)
 
@@ -260,5 +273,5 @@ def test3():
 
 if __name__ == "__main__":
     test1()
-    test2()
+    #test2()
     test3()
