@@ -1,8 +1,15 @@
 from pymongo import MongoClient
-from request import Request
+from util.request import Request
 import re
 import uuid
 import json
+import util.auth
+import bcrypt
+
+
+#return a 302 Found response that redirects to the home page
+def three_o_two():
+    return b'HTTP/1.1 302 Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nLocation: /public/index.html\r\n\r\n'
 
 
 # Just return an encoded 404 response
@@ -162,14 +169,48 @@ def handle_post_chat(request: Request):
     else:
         return not_found(request)
 
+def handle_post_rec(request:Request):
+    # format of the body:
+    # username_reg=test&password_reg=1234567890
+    # parse the body of the request, separating the user and pass
+    credent = util.auth.extract_credentials(request)
+
+    # I don't think it says it anywhere in the doc, but I'm assuming usernames can't be empty
+    if credent[0] < 1:
+        return b'HTTP/1.1 400 Bad Request\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 41\r\n\r\nInvalid Username (must be greater than 0)'
+
+    if not util.auth.validate_password(credent[1]):
+        return b'HTTP/1.1 400 Bad Request\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 16\r\n\r\nInvalid Password'
+
+    # if the username and password are valid, generate a salt, append it to the password, and then store the
+    # username, salt, and password in the database
+    # bcrypt does it all for me!
+    password = credent[1]
+    bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hash = bcrypt.hashpw(bytes, salt)
+
+    esp_username = escape(credent[0])
+
+    # now store the username, salt and hash in the database!
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+    user_data = db["user_data"]
+
+    # insert the data
+    user_data.insert_one({"username": esp_username, "password": hash, "salt": salt})
+
+    # return 302 Found
+    return three_o_two()
+
+
+
+
 
 class Router:
     def __init__(self):
-        # self.get is a list of tuples in this format: (Method, Path, Function)
-        self.get = []
-
-        # self.post is a list of tuples in this format: (Method, Path, Function)
-        self.post = []
+        # self.routes is a list of tuples in this format: (Method, Path, Function)
+        self.routes = []
 
     # A function that adds all of my routes for me
     def add_all_routes(self):
@@ -183,59 +224,37 @@ class Router:
         self.add_route("GET", "^/$", handle_html)
 
     def add_route(self, method: str, path: str, func):
-        # If the method is get, append a tuple of (method, path, func) to the self.get list
-        if method == "GET":
-            self.get.append((method, path, func))
-        #  If the method is post, append a tuple of (method, path, func) to the self.get list
-        elif method == "POST":
-            self.post.append((method, path, func))
-        # This router only handles get and post, if the method is neither of them, just return without doing anything
-        else:
-            return
+        # Simply add the route to the list as a tuple in the form (Method, Path, Function)
+        self.routes.append((method, path, func))
+        return
 
     def route_request(self, req: Request):
 
-        # If the method of the request is get, look into self.get
-        if req.method == "GET":
+        # If the list is NOT empty, start looking
+        if len(self.routes) > 0:
 
-            # Perhaps it's getting an error bc it's iterating through an emtpy list?
-            if len(self.get) > 0:
-                # For every tuple in self.get:
-                for x in self.get:
-                    # If the re expression matches the path given, return the byte array from the function
-                    # The tuple is formatted as (Method, Path, Function), so x[1] is the path and x[2] is the function.
+            # For every tuple in self.routes:
+            for x in self.routes:
+                # If the method matches, and the re expression matches the path given, return the byte array from the
+                # function.
 
-                    # I had this as just "if re.match(x[1], req.path):" originally,
-                    # but re.match seems to return None if it doesn't match, so I set it to != None,
-                    # and then pyCharm suggested I use "is not" instead.
-                    if re.match(x[1], req.path) is not None:
-                        return x[2](req)
+                # The tuple is formatted as (Method, Path, Function), so x[1] is the path and x[2] is the
+                # function.
 
-                # If you've gotten this far, that means it's not in there so just return an encoded 404
-                return not_found(req)
-            else:
-                #if it's empty just return a 404
-                return not_found(req)
+                # I had this as just "if re.match(x[1], req.path):" originally, but re.match seems to
+                # return None if it doesn't match, so I set it to != None, and then pyCharm suggested I use "is not"
+                # instead.
+                #print(req.method + " =? " + x[0])
+                #print(req.path + " =? " + x[1])
 
-        # If the method of the request is post, look into self.post
-        elif req.method == "POST":
+                if req.method == x[0] and re.match(x[1], req.path) is not None:
+                    return x[2](req)
+                
+            return not_found(req)
 
-            # Perhaps it's getting an error bc it's iterating through an emtpy list?
-            if len(self.post) > 0:
-
-                # For every tuple in self.post:
-                for x in self.post:
-                    # If the re expression matches the path given, return the byte array from the function
-                    if re.match(x[1], req.path) is not None:
-                        return x[2](req)
-                # If you've gotten this far, that means it's not in there so just return an encoded 404
-                return not_found(req)
-            else:
-                #if it's empty just return a 404
-                return not_found(req)
-
-        # This router only handles post and get, anything else is just a 404
+        # If the list is empty, or the item cannot be found, return a 404
         else:
+            #print("Emtpy!")
             return not_found(req)
 
 
@@ -247,7 +266,7 @@ def test1():
     r.add_all_routes()
     r.add_route("GET", "^/public/style.css$", handle_css)
     route = r.route_request(request)
-    print(route)
+    #print(route)
 
 
 # Simple test with GET and an image
@@ -258,7 +277,7 @@ def test2():
     r = Router()
     r.add_all_routes()
     route = r.route_request(request)
-    print(route)
+    #print(route)
 
 
 # Simple test with POST and a chat message
@@ -268,10 +287,28 @@ def test3():
     r = Router()
     r.add_all_routes()
     route = r.route_request(request)
-    print(route)
+    #print(route)
+
+# Simple test with DELETE (something other than GET or POST)
+def test4():
+    request = Request(
+        b'DELETE / HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nContent-Length: 18\r\nsec-ch-ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"\r\nsec-ch-ua-platform: "macOS"\r\nsec-ch-ua-mobile: ?0\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\r\nContent-Type: text/plain;charset=UTF-8\r\nAccept: */*\r\nOrigin: http://localhost:8080\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Dest: empty\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; visits=5\r\n\r\n{"message":"test"}')
+    r = Router()
+    r.add_all_routes()
+    route = r.route_request(request)
+    #print(route)
+
+# Simple test for if the path does not exist (return 404)
+def test5():
+    request = Request(
+        b'DELETE / HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nContent-Length: 18\r\nsec-ch-ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"\r\nsec-ch-ua-platform: "macOS"\r\nsec-ch-ua-mobile: ?0\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\r\nContent-Type: text/plain;charset=UTF-8\r\nAccept: */*\r\nOrigin: http://localhost:8080\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Dest: empty\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; visits=5\r\n\r\n{"message":"test"}')
+    r = Router()
+    r.add_all_routes()
+    #print(route)
 
 
 if __name__ == "__main__":
     test1()
-    #test2()
-    test3()
+    test2()
+    test4()
+    test5()

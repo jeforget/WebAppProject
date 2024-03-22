@@ -105,14 +105,14 @@ def test4():
 
 def test5():
     request = Request(
-        b'POST /test HTTP/1.1\r\nHost: foo.example\r\nContent-Type:application/x-www-form-urlencoded\r\nCookie: id=X6kAwpgW29M; visits=4\r\n\r\nfield1=value1&field2=value2')
+        b'POST /register HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nContent-Length: 41\r\nCache-Control: max-age=0\r\nsec-ch-ua: "Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"\r\nsec-ch-ua-mobile: ?0\r\nsec-ch-ua-platform: "macOS"\r\nUpgrade-Insecure-Requests: 1\r\nOrigin: http://localhost:8080\r\nContent-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: navigate\r\nSec-Fetch-User: ?1\r\nSec-Fetch-Dest: document\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; session=eyJ1c2VybmFtZSI6bnVsbH0.ZfyNXw.LWoVYAQLOKe8vSy0uWFTzJYLWg4; visits=1\r\n\r\nusername_reg=test&password_reg=1234567890')
     assert request.method == "POST"
     assert "Host" in request.headers
     assert "id" in request.cookies
     assert request.cookies["id"] == "X6kAwpgW29M"
     #print(request.cookies)
     assert "visits" in request.cookies
-    assert request.body == b"field1=value1&field2=value2"  # There is a body for this request.
+    assert request.body == b"username_reg=test&password_reg=1234567890"  # There is a body for this request.
     # When parsing POST requests, the body must be in bytes, not str
 
 

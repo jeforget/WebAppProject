@@ -25,9 +25,6 @@ def extract_credentials(req: Request):
 
     ret_pass = replace_enc(password)
 
-    print("pass = " + ret_pass)
-    print("user = " + user)
-
     return [user, ret_pass]
 
 
