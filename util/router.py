@@ -5,16 +5,88 @@ import uuid
 import json
 import util.auth
 import bcrypt
+import string
+import secrets
+from hashlib import sha256
 
 
-#return a 302 Found response that redirects to the home page
+def handle_logout(request: Request):
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+
+    # hoho now we can grab the cookie (I just finished setting up the auth token)
+    # print("COOKIES = " + str(request.cookies))
+    token = request.cookies.get('auth', "none")
+    # print("TOKEN = " + str(token))
+
+    if token != "none":
+        user_data = db["user_data"]
+
+        n_hash = sha256(token.encode()).digest()
+
+        data = list(user_data.find({"auth": n_hash}))
+        # print("DATA = " + str(data))
+        if data.__len__() > 0:
+            user_stuff = data[0]
+            username = user_stuff['username']
+            pwd = user_stuff['password']
+            salt = user_stuff['salt']
+
+            user_data.delete_many({"username": username})
+
+            user_data.insert_one({"username": username, "password": pwd, "salt": salt, "auth": b''})
+
+            return three_o_two()
+
+    return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
+
+# return a 302 Found response that redirects to the home page
 def three_o_two():
-    return b'HTTP/1.1 302 Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nLocation: /public/index.html\r\n\r\n'
+    return b'HTTP/1.1 302 Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nLocation: /\r\n\r\n'
 
 
 # Just return an encoded 404 response
 def not_found(req: Request):
     return b'HTTP/1.1 404 Not Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nPage not found'
+
+
+def handle_delete_chat(request: Request):
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+    chat_collection = db["chat"]
+
+    # hoho now we can grab the cookie (I just finished setting up the auth token)
+    # print("COOKIES = " + str(request.cookies))
+    token = request.cookies.get('auth', "none")
+    # print("TOKEN = " + str(token))
+
+    if token != "none":
+        user_data = db["user_data"]
+
+        n_hash = sha256(token.encode()).digest()
+
+        data = list(user_data.find({"auth": n_hash}))
+        # print("DATA = " + str(data))
+        if data.__len__() > 0:
+            user_stuff = data[0]
+            username = user_stuff['username']
+
+            # /chat-messages/bd0eda8a-75b0-454a-b531-e8530a844c4f
+            # /chat-messages/bd0eda8a-75b0-454a-b531-e8530a844c4f
+            # /chat-messages/1de9f220-fb64-4df5-a9e1-d4365a63961c
+
+            path = request.path.split('/')
+            msg_id = path[2]
+
+            mesg = list(chat_collection.find({"id": msg_id}))
+            q_msg = mesg[0]
+
+            if q_msg["username"] == username:
+                chat_collection.delete_one({"id": msg_id})
+                return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
+    return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
 
 
 def handle_get_chat(req: Request):
@@ -23,6 +95,7 @@ def handle_get_chat(req: Request):
     mongo_client = MongoClient("mongo")
     db = mongo_client["cse312"]
     chat_collection = db["chat"]
+    # , {"_id": 0}
     all_data = list(chat_collection.find({}, {"_id": 0}))
     # print(all_data)
     json_data = json.dumps(all_data)
@@ -78,6 +151,33 @@ def handle_html(request: Request):
     with open("public/index.html") as f:
         data = f.read()
         data = data.replace("{{visits}}", strvist)
+
+        # Logout:\n<form action="/logout" method="post" enctype="application/x-www-form-urlencoded">\n<input type="submit" value="Post">\n</form>
+
+        # if the auth token cookie matches the auth token in the db, have logout appear
+
+        token = request.cookies.get('auth', "none")
+
+        mongo_client = MongoClient("mongo")
+        db = mongo_client["cse312"]
+
+        if token != "none":
+            user_data = db["user_data"]
+
+            n_hash = sha256(token.encode()).digest()
+
+            u_data = list(user_data.find({"auth": n_hash}))
+
+            if u_data.__len__() > 0:
+                data = data.replace("{{logout}}",
+                                    'Logout:\n<form action="/logout" method="post" enctype="application/x-www-form-urlencoded">\n<input type="submit" value="Post">\n</form>')
+
+            else:
+                data = data.replace("{{logout}}", "")
+        # else, have it not do that
+        else:
+            data = data.replace("{{logout}}", "")
+
         e_data = data.encode()
         length = len(e_data)
         ret_send = to_send.replace("LEN", length.__str__())
@@ -163,24 +263,45 @@ def handle_post_chat(request: Request):
         mesg = message_data.get("message")
         escp_msg = escape(mesg)
         uid = uuid.uuid4()
+
+        # hoho now we can grab the cookie (I just finished setting up the auth token)
+        # print("COOKIES = " + str(request.cookies))
+        token = request.cookies.get('auth', "none")
+        # print("TOKEN = " + str(token))
+
+        if token != "none":
+            user_data = db["user_data"]
+
+            n_hash = sha256(token.encode()).digest()
+
+            data = list(user_data.find({"auth": n_hash}))
+            # print("DATA = " + str(data))
+            if data.__len__() > 0:
+                user_stuff = data[0]
+                username = user_stuff['username']
+                # print("POSTED AS: " + username)
+                chat_collection.insert_one({"message": escp_msg, "username": username, "id": uid.__str__()})
+                return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
         chat_collection.insert_one({"message": escp_msg, "username": "guest", "id": uid.__str__()})
-        # print(message_data)
+        # print("POSTED AS: guest")
         return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
     else:
         return not_found(request)
 
-def handle_post_rec(request:Request):
+
+def handle_post_rec(request: Request):
     # format of the body:
     # username_reg=test&password_reg=1234567890
     # parse the body of the request, separating the user and pass
     credent = util.auth.extract_credentials(request)
 
     # I don't think it says it anywhere in the doc, but I'm assuming usernames can't be empty
-    if credent[0] < 1:
-        return b'HTTP/1.1 400 Bad Request\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 41\r\n\r\nInvalid Username (must be greater than 0)'
+    if credent[0].__len__() < 1:
+        return three_o_two()
 
     if not util.auth.validate_password(credent[1]):
-        return b'HTTP/1.1 400 Bad Request\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 16\r\n\r\nInvalid Password'
+        return three_o_two()
 
     # if the username and password are valid, generate a salt, append it to the password, and then store the
     # username, salt, and password in the database
@@ -198,13 +319,70 @@ def handle_post_rec(request:Request):
     user_data = db["user_data"]
 
     # insert the data
-    user_data.insert_one({"username": esp_username, "password": hash, "salt": salt})
+    user_data.insert_one({"username": esp_username, "password": hash, "salt": salt, "auth": b''})
 
     # return 302 Found
     return three_o_two()
 
 
+def handle_login(request: Request):
+    # grab username and password from the request
+    credent = util.auth.extract_credentials(request)
 
+    # grab the login info from the database
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+    user_data = db["user_data"]
+
+    data = list(user_data.find({"username": credent[0]}))
+    # returns what looks like a list of dicts
+    # [{'_id': ObjectId('65fdf69476cb9986210ddabc'), 'username': 'Justin', 'password': b'$2b$12$FBHi4QbwAW4T2NNqrHJmoediED8iGb8FfCao1dl6MVH5FWJfJiCPq', 'salt': b'$2b$12$FBHi4QbwAW4T2NNqrHJmoe'}]
+
+    # if the list is not empty:
+    if data.__len__() > 0:
+        # there should only be 1 user with this name...
+        entry_one = data[0]
+        username = entry_one['username']
+        # remember, the hash is a byte array, do NOT treat like a string!
+        hashword = entry_one['password']
+        # salt is also stored as bytes!
+        salt = entry_one['salt']
+
+        # "unhash" and make sure the passwords match, if they do, create an auth token and overwrite the old auth token
+
+        # encoding user password
+        input_pass = credent[1].encode('utf-8')
+
+        # checking password
+        result = bcrypt.checkpw(input_pass, hashword)
+
+        if result:
+            # make sure to set this new auth token in a response, and destroy the old one
+            # remember to set the Httponly directive!
+
+            # auth tokens are just random right?
+            len = 20
+            chars = string.ascii_letters + string.digits + '!@#$%^&*()'
+            token = ''.join(secrets.choice(chars) for i in range(len))
+            cookie = 'Set-Cookie: auth=' + token + ';Max-Age=3600; HttpOnly'
+
+            # Hash the auth token for storage
+            hash_token = sha256(token.encode()).digest()
+
+            # try a different way...
+            user_data.delete_many({"username": username})
+
+            user_data.insert_one({"username": username, "password": hashword, "salt": salt, "auth": hash_token})
+
+            # setting up the response
+            response = 'HTTP/1.1 302 Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nLocation: /\r\nCOOKIE\r\n\r\n'
+            return_response = response.replace('COOKIE', cookie)
+            # print("LOGIN SUCCESSFUL")
+            return return_response.encode()
+
+    # if this user doesn't exist, from what I read in the handout I don't really do anything.
+    # print("LOGIN FAILED")
+    return three_o_two()
 
 
 class Router:
@@ -222,6 +400,10 @@ class Router:
         self.add_route("GET", "^/chat-messages$", handle_get_chat)
         self.add_route("POST", "^/chat-messages$", handle_post_chat)
         self.add_route("GET", "^/$", handle_html)
+        self.add_route("POST", "^/register$", handle_post_rec)
+        self.add_route("POST", "^/login$", handle_login)
+        self.add_route("DELETE", "^/chat-messages", handle_delete_chat)
+        self.add_route("POST", "^/logout$", handle_logout)
 
     def add_route(self, method: str, path: str, func):
         # Simply add the route to the list as a tuple in the form (Method, Path, Function)
@@ -244,17 +426,17 @@ class Router:
                 # I had this as just "if re.match(x[1], req.path):" originally, but re.match seems to
                 # return None if it doesn't match, so I set it to != None, and then pyCharm suggested I use "is not"
                 # instead.
-                #print(req.method + " =? " + x[0])
-                #print(req.path + " =? " + x[1])
+                # print(req.method + " =? " + x[0])
+                # print(req.path + " =? " + x[1])
 
                 if req.method == x[0] and re.match(x[1], req.path) is not None:
                     return x[2](req)
-                
+
             return not_found(req)
 
         # If the list is empty, or the item cannot be found, return a 404
         else:
-            #print("Emtpy!")
+            # print("Emtpy!")
             return not_found(req)
 
 
@@ -266,7 +448,7 @@ def test1():
     r.add_all_routes()
     r.add_route("GET", "^/public/style.css$", handle_css)
     route = r.route_request(request)
-    #print(route)
+    # print(route)
 
 
 # Simple test with GET and an image
@@ -277,7 +459,7 @@ def test2():
     r = Router()
     r.add_all_routes()
     route = r.route_request(request)
-    #print(route)
+    # print(route)
 
 
 # Simple test with POST and a chat message
@@ -287,7 +469,8 @@ def test3():
     r = Router()
     r.add_all_routes()
     route = r.route_request(request)
-    #print(route)
+    # print(route)
+
 
 # Simple test with DELETE (something other than GET or POST)
 def test4():
@@ -296,7 +479,8 @@ def test4():
     r = Router()
     r.add_all_routes()
     route = r.route_request(request)
-    #print(route)
+    # print(route)
+
 
 # Simple test for if the path does not exist (return 404)
 def test5():
@@ -304,7 +488,7 @@ def test5():
         b'DELETE / HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nContent-Length: 18\r\nsec-ch-ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"\r\nsec-ch-ua-platform: "macOS"\r\nsec-ch-ua-mobile: ?0\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\r\nContent-Type: text/plain;charset=UTF-8\r\nAccept: */*\r\nOrigin: http://localhost:8080\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Dest: empty\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; visits=5\r\n\r\n{"message":"test"}')
     r = Router()
     r.add_all_routes()
-    #print(route)
+    # print(route)
 
 
 if __name__ == "__main__":
@@ -312,3 +496,7 @@ if __name__ == "__main__":
     test2()
     test4()
     test5()
+
+    # /chat-messages/bd0eda8a-75b0-454a-b531-e8530a844c4f
+    # /chat-messages/bd0eda8a-75b0-454a-b531-e8530a844c4f
+    # /chat-messages/1de9f220-fb64-4df5-a9e1-d4365a63961c

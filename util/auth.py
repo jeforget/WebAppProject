@@ -2,7 +2,6 @@ from util.request import Request
 
 
 def extract_credentials(req: Request):
-    print("test output")
     # username_reg
     # password_reg
     # username_login
@@ -53,32 +52,32 @@ def validate_password(pas: str):
     # len of < 8
     if len(pas) < 8:
         return False
-    print("has at least len of 8")
+    #print("has at least len of 8")
 
     # at least 1 uppercase letter
     if up_or_no(pas):
         return False
-    print("has at least 1 upper")
+    #print("has at least 1 upper")
 
     # at least 1 lowercase letter
     if low_or_no(pas):
         return False
-    print("has at least 1 lower")
+    #print("has at least 1 lower")
 
     # at least 1 number
     if num_or_no(pas):
         return False
-    print("has at least 1 num")
+    #print("has at least 1 num")
 
     # at least 1 special char
     if spec_or_no(pas):
         return False
-    print("has at least 1 special")
+    #print("has at least 1 special")
 
     # no invalid chars
     if alpha_or_no(pas):
         return False
-    print("has no invalid chars")
+    #print("has no invalid chars")
 
     return True
 
@@ -139,9 +138,10 @@ def alpha_or_no(pas: str):
     for s in pas:
         c = 0
         if s.isalnum():
-            print(s + " is alpha")
+            #print(s + " is alpha")
+            continue
         else:
-            print(s + " is NOT alpha")
+            #print(s + " is NOT alpha")
             if special.__contains__(s):
                 c = 1
             else:
