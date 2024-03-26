@@ -172,6 +172,23 @@ def handle_html(request: Request):
                 data = data.replace("{{logout}}",
                                     'Logout:\n<form action="/logout" method="post" enctype="application/x-www-form-urlencoded">\n<input type="submit" value="Post">\n</form>')
 
+                # if this is an authenticated user, issue them an xsrf token, save it to the database, then embed it into the html
+                chars = string.ascii_letters + string.digits + '!@#$%^&*()'
+                len = 20
+                x_token = ''.join(secrets.choice(chars) for i in range(len))
+
+                # insert into html
+                data = data.replace("{{token}}", x_token)
+
+                # insert into db
+                username = u_data[0]["username"]
+                hashword = u_data[0]["password"]
+                salt = u_data[0]["salt"]
+                hash_token = u_data[0]["auth"]
+                user_data.delete_many({"username": username})
+                user_data.insert_one({"username": username, "password": hashword, "salt": salt, "auth": hash_token,
+                                      "token": x_token})
+
             else:
                 data = data.replace("{{logout}}", "")
         # else, have it not do that
@@ -179,7 +196,7 @@ def handle_html(request: Request):
             data = data.replace("{{logout}}", "")
 
         e_data = data.encode()
-        length = len(e_data)
+        length = e_data.__len__()
         ret_send = to_send.replace("LEN", length.__str__())
         send = ret_send.encode()
         return send + e_data
@@ -280,6 +297,19 @@ def handle_post_chat(request: Request):
                 user_stuff = data[0]
                 username = user_stuff['username']
                 # print("POSTED AS: " + username)
+
+                # since the user is authenticated, check for x_token next
+                x_token = user_stuff['token']
+
+            # body = {"message":"test","token":"@VJCeuau!6S*h&5AxzHm"}
+
+                tok = message_data.get("token","NONE")
+
+                #print("b = " + str(tok))
+                if x_token != tok:
+                    # 403
+                    return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
                 chat_collection.insert_one({"message": escp_msg, "username": username, "id": uid.__str__()})
                 return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
 
@@ -319,7 +349,7 @@ def handle_post_rec(request: Request):
     user_data = db["user_data"]
 
     # insert the data
-    user_data.insert_one({"username": esp_username, "password": hash, "salt": salt, "auth": b''})
+    user_data.insert_one({"username": esp_username, "password": hash, "salt": salt, "auth": b'', "token": ""})
 
     # return 302 Found
     return three_o_two()
@@ -340,6 +370,7 @@ def handle_login(request: Request):
 
     # if the list is not empty:
     if data.__len__() > 0:
+        #print(data[0])
         # there should only be 1 user with this name...
         entry_one = data[0]
         username = entry_one['username']
@@ -347,6 +378,7 @@ def handle_login(request: Request):
         hashword = entry_one['password']
         # salt is also stored as bytes!
         salt = entry_one['salt']
+        x_token = entry_one['token']
 
         # "unhash" and make sure the passwords match, if they do, create an auth token and overwrite the old auth token
 
@@ -372,7 +404,8 @@ def handle_login(request: Request):
             # try a different way...
             user_data.delete_many({"username": username})
 
-            user_data.insert_one({"username": username, "password": hashword, "salt": salt, "auth": hash_token})
+            user_data.insert_one(
+                {"username": username, "password": hashword, "salt": salt, "auth": hash_token, "token": x_token})
 
             # setting up the response
             response = 'HTTP/1.1 302 Found\r\nX-Content-Type-Options: nosniff\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nLocation: /\r\nCOOKIE\r\n\r\n'
