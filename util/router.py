@@ -34,7 +34,7 @@ def handle_logout(request: Request):
 
             user_data.delete_many({"username": username})
 
-            user_data.insert_one({"username": username, "password": pwd, "salt": salt, "auth": b''})
+            user_data.insert_one({"username": username, "password": pwd, "salt": salt, "auth": b'', "token": ""})
 
             return three_o_two()
 
@@ -370,7 +370,7 @@ def handle_login(request: Request):
 
     # if the list is not empty:
     if data.__len__() > 0:
-        #print(data[0])
+        print("data = " + str(data[0]))
         # there should only be 1 user with this name...
         entry_one = data[0]
         username = entry_one['username']
