@@ -9,7 +9,6 @@ import string
 import secrets
 from hashlib import sha256
 
-
 def handle_logout(request: Request):
     mongo_client = MongoClient("mongo")
     db = mongo_client["cse312"]
@@ -370,7 +369,7 @@ def handle_login(request: Request):
 
     # if the list is not empty:
     if data.__len__() > 0:
-        print("data = " + str(data[0]))
+        #print("data = " + str(data[0]))
         # there should only be 1 user with this name...
         entry_one = data[0]
         username = entry_one['username']
