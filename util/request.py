@@ -10,34 +10,34 @@ class Request:
         self.headers = {}
         self.cookies = {}
 
-        req = request.decode()
+        req = request
         # start by splitting the request at \r\n\r\n
-        splitby1 = req.split("\r\n\r\n", 1)
+        splitby1 = req.split(b"\r\n\r\n", 1)
         # print("First split = " + str(splitby1))
 
         # split the first half by \r\n
-        splitby2 = splitby1[0].split("\r\n")
+        splitby2 = splitby1[0].split(b"\r\n")
         # print("splitby2 = " + str(splitby2))
 
         # take the request line and split by " ", then place the method, body, and ver in respective vars.
-        req_line = splitby2[0].split(" ")
-        self.method = req_line[0]
-        self.http_version = req_line[2]
-        self.path = req_line[1]
+        req_line = splitby2[0].split(b" ")
+        self.method = req_line[0].decode()
+        self.http_version = req_line[2].decode()
+        self.path = req_line[1].decode()
 
         i = 1
         while i < len(splitby2):
-            head = splitby2[i].split(":", 1)
+            head = splitby2[i].split(b":", 1)
             # print("head = " + str(head))
-            key = head[0].strip()
+            key = head[0].strip().decode()
             # print("key = " + str(key))
-            val = head[1].strip()
+            val = head[1].strip().decode()
             # print("val = " + str(val))
             self.headers[key] = val
             i += 1
 
-        if splitby1[1] != '':
-            self.body = splitby1[1].encode()
+        if splitby1[1] != b'':
+            self.body = splitby1[1]
 
         handle_cookies(self)
 
@@ -108,8 +108,8 @@ def test5():
         b'POST /register HTTP/1.1\r\nHost: localhost:8080\r\nConnection: keep-alive\r\nContent-Length: 41\r\nCache-Control: max-age=0\r\nsec-ch-ua: "Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"\r\nsec-ch-ua-mobile: ?0\r\nsec-ch-ua-platform: "macOS"\r\nUpgrade-Insecure-Requests: 1\r\nOrigin: http://localhost:8080\r\nContent-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: navigate\r\nSec-Fetch-User: ?1\r\nSec-Fetch-Dest: document\r\nReferer: http://localhost:8080/\r\nAccept-Encoding: gzip, deflate, br, zstd\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: Pycharm-3b3d647e=9c644a39-df20-4fb8-a4dd-e1dcdfd170c1; session=eyJ1c2VybmFtZSI6bnVsbH0.ZfyNXw.LWoVYAQLOKe8vSy0uWFTzJYLWg4; visits=1\r\n\r\nusername_reg=test&password_reg=1234567890')
     assert request.method == "POST"
     assert "Host" in request.headers
-    assert "id" in request.cookies
-    assert request.cookies["id"] == "X6kAwpgW29M"
+    assert "Pycharm-3b3d647e" in request.cookies
+    assert request.cookies["Pycharm-3b3d647e"] == "9c644a39-df20-4fb8-a4dd-e1dcdfd170c1"
     #print(request.cookies)
     assert "visits" in request.cookies
     assert request.body == b"username_reg=test&password_reg=1234567890"  # There is a body for this request.
