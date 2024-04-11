@@ -1,3 +1,6 @@
+import base64
+import hashlib
+
 from util.request import Request
 
 
@@ -52,32 +55,32 @@ def validate_password(pas: str):
     # len of < 8
     if len(pas) < 8:
         return False
-    #print("has at least len of 8")
+    # print("has at least len of 8")
 
     # at least 1 uppercase letter
     if up_or_no(pas):
         return False
-    #print("has at least 1 upper")
+    # print("has at least 1 upper")
 
     # at least 1 lowercase letter
     if low_or_no(pas):
         return False
-    #print("has at least 1 lower")
+    # print("has at least 1 lower")
 
     # at least 1 number
     if num_or_no(pas):
         return False
-    #print("has at least 1 num")
+    # print("has at least 1 num")
 
     # at least 1 special char
     if spec_or_no(pas):
         return False
-    #print("has at least 1 special")
+    # print("has at least 1 special")
 
     # no invalid chars
     if alpha_or_no(pas):
         return False
-    #print("has no invalid chars")
+    # print("has no invalid chars")
 
     return True
 
@@ -138,10 +141,10 @@ def alpha_or_no(pas: str):
     for s in pas:
         c = 0
         if s.isalnum():
-            #print(s + " is alpha")
+            # print(s + " is alpha")
             continue
         else:
-            #print(s + " is NOT alpha")
+            # print(s + " is NOT alpha")
             if special.__contains__(s):
                 c = 1
             else:
@@ -162,12 +165,14 @@ def test_val_1():
     pwd_5 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&()-_=1234567890"
     assert validate_password(pwd_5)
 
+
 def test_auth_1():
     request = Request(
         b'POST /login HTTP/1.1\r\nHost: foo.example\r\nContent-Type:application/x-www-form-urlencoded\r\nContent-Length: 27\r\n\r\nusername=Nova&password=W1lbUr26!')
     pair = extract_credentials(request)
     assert pair[0] == "Nova"
     assert pair[1] == "W1lbUr26!"
+
 
 def test_auth_2():
     request = Request(
@@ -176,6 +181,7 @@ def test_auth_2():
     pair = extract_credentials(request)
     assert pair[0] == "Nova"
     assert pair[1] == "!@#$%^&()-_="
+
 
 def test_auth_3():
     request = Request(
@@ -190,3 +196,77 @@ if __name__ == '__main__':
     test_auth_1()
     test_auth_2()
     test_auth_3()
+
+# STUFF FOR HW 4 ------------------------------------------------------------------------------
+
+def compute_accept(key):
+    magic_number = "12939rujf2309jr80h283r"  # this is not the real key go check notes
+    concat_key = key + magic_number
+    sha1_hash = hashlib.sha1(concat_key).decode()
+    accept_key = base64.b64encode(sha1_hash).decode()
+    return accept_key
+
+
+def generate_ws_frame(payload):
+    payload_length = len(payload)
+    frame = bytearray()
+    frame.append(0b10000001)
+    if payload_length < 126:
+        frame.append(payload_length)
+        frame.extend(payload)
+    elif payload_length < 65536:
+        frame.append(126)
+        frame.extend(payload_length.to_bytes(2, byteorder="big"))
+        frame.extend(payload)
+    else:
+        frame.append(127)
+        frame.extend(payload_length.to_bytes(8, byteorder="big"))
+        frame.extend(payload)
+    return bytes(frame)
+
+class RecB2:
+    def __int__(self):
+        self.finbit
+        self.opcode
+        self.payload_length
+        self.payload
+
+def parse_wx_frame(frame):
+    output = RecB2()
+    output.finbit = (frame[0] & 0b10000000) >> 7 # 0 >> 7 = 0, 128 (256?) >> 7 = 0
+    output.opcode = (frame[0] & 0b00001111)
+
+    masking_bit = frame[1] & 0b10000000 # either 0 or 128
+    pl = frame[1] & 0b01111111
+
+    if pl == 126:
+        output.payload_length = int.from_bytes(frame[2:4], byteorder="big")
+        # Moving the frame forward so that we're working with the next chunk
+        frame = frame[4:]
+    elif pl == 126:
+        output.payload_length = int.from_bytes(frame[2:10], byteorder="big") # 2 -> 10 is 8 bytes
+        # Moving the frame forward so that we're working with the next chunk
+        frame = frame[10:]
+    else:
+        output.payload_length = pl
+        frame = frame[2:]
+    # need masking bytes and payload
+
+    # mb can be 0 or some number bc we just &'ed it
+    if masking_bit != 0:
+        mask = frame[:4]
+        frame = frame[4:] # moving it up again
+
+    output.payload = frame
+
+    if masking_bit != 0:
+        for index  in range(len(output.payload)): # starts at 0, goes to len - 1
+            mask_index = index % 4
+            if mask_index == 0:
+                mask_index = 4
+            mask_index -= 1
+            output.payload[index] = output.payload[index] ^ mask[mask_index]
+
+
+
+

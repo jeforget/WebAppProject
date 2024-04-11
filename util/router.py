@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 from util.request import Request
+import util.multipart
 import re
 import uuid
 import json
@@ -8,6 +9,79 @@ import bcrypt
 import string
 import secrets
 from hashlib import sha256
+
+# This is pretty much doing exactly what handle_post_chat is doing.
+# Should I have made a single function that I could call for both? Yes. However, I did not.
+def send_img_to_db(request: Request, html: str):
+
+    # Connect to the db
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+    chat_collection = db["chat"]
+
+    uid = uuid.uuid4()
+
+    token = request.cookies.get('auth', "none")
+
+    if token != "none":
+        user_data = db["user_data"]
+
+        n_hash = sha256(token.encode()).digest()
+
+        data = list(user_data.find({"auth": n_hash}))
+        # print("DATA = " + str(data))
+        if data.__len__() > 0:
+            user_stuff = data[0]
+            username = user_stuff['username']
+            # print("POSTED AS: " + username)
+
+            # since the user is authenticated, check for x_token next
+            x_token = user_stuff['token']
+
+            # I'll get beck to this later
+            # tok = message_data.get("token", "NONE")
+
+            # print("b = " + str(tok))
+            #if x_token != tok:
+                # 403
+            #    return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
+            chat_collection.insert_one({"message": html, "username": username, "id": uid.__str__()})
+            return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
+    chat_collection.insert_one({"message": html, "username": "guest", "id": uid.__str__()})
+    # print("POSTED AS: guest")
+    return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
+
+def handle_post_image(request: Request):
+
+    # Start by giving this request to multipart for parsing
+    multi_request = util.multipart.parse_multipart(request)
+
+    # Bytes of the image
+    image = b''
+    for part in multi_request.parts:
+        if part.name == "upload":
+            image = part.content
+
+    # Unique id for this image
+    uid = str(uuid.uuid4()) + ".jpg"
+    print("The unique name for this image is " + uid)
+
+    # Save this image to disk
+
+    with open("public/image/" + uid, "wb") as output_file:
+        output_file.write(image)
+
+    #Save <img src=”/public/images/user_upload1” alt=”an image of something” class=”my_image/> to the db as a chat message same as usual
+    html = '<img src="/public/image/NAME" alt="This should not be seen..." class="my_image"/>'
+    html_send = html.replace("NAME", uid)
+
+    send_img_to_db(request, html_send)
+
+    return three_o_two()
+
+
 
 def handle_logout(request: Request):
     mongo_client = MongoClient("mongo")
@@ -235,10 +309,9 @@ def handle_img(request: Request):
 
     paths = path.split("/")
     file_name = tail(paths)
-    n_path = "public/image/" + file_name
+    n_path = "public/image/" + file_name.replace("/", " ")
 
-    if file_name != "cat.jpg" and file_name != "dog.jpg" and file_name != "eagle.jpg" and file_name != "elephant.jpg" and file_name != "elephant-small.jpg" and file_name != "flamingo.jpg" and file_name != "kitten.jpg":
-        return not_found(request)
+    print("n_path = " + n_path)
 
     with open(n_path, "rb") as f:
         data = f.read()
@@ -280,7 +353,7 @@ def handle_post_chat(request: Request):
         escp_msg = escape(mesg)
         uid = uuid.uuid4()
 
-        # hoho now we can grab the cookie (I just finished setting up the auth token)
+        # hoho now we can grab the cookie (I just finished setting up the auth token, pretty excited)
         # print("COOKIES = " + str(request.cookies))
         token = request.cookies.get('auth', "none")
         # print("TOKEN = " + str(token))
@@ -436,6 +509,7 @@ class Router:
         self.add_route("POST", "^/login$", handle_login)
         self.add_route("DELETE", "^/chat-messages", handle_delete_chat)
         self.add_route("POST", "^/logout$", handle_logout)
+        self.add_route("POST", "^/form-path$", handle_post_image)
 
     def add_route(self, method: str, path: str, func):
         # Simply add the route to the list as a tuple in the form (Method, Path, Function)
