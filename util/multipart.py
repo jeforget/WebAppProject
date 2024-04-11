@@ -32,31 +32,36 @@ def parse_multipart(request: Request):
     m_media = Media()
 
     # Setting the boundary
-    m_media.boundary = "--" + boundary
+    m_media.boundary = boundary
 
     # Next step is to cut up the body into "parts":
 
     # Replace the "initial" and "final" boundaries with b'', then I can split on the general bound
     first_bound = "--" + boundary + "\r\n"
-    final_bound = "\r\n" + "--" + boundary + "--\r\n"
+    final_bound2 = "\r\n--" + boundary + "--"
+    final_bound = "\r\n--" + boundary + "--\r\n"
     general_bound = "\r\n--" + boundary + "\r\n"
 
-
     body = request.body.replace(first_bound.encode(), b'', 1)
-
+    #print(body)
     body = body.replace(final_bound.encode(), b'')
+    #print(body)
+    body = body.replace(final_bound2.encode(), b'')
+    #print(body)
 
     body = body.split(general_bound.encode())
+    #print(body)
 
     # Now for every split in body, I can create a part
 
     for b in body:
+        #print("b = " + str(b))
         # Create the part obj
         b_part = Part()
 
         # First, separate by the \r\n
         split = b.split(b'\r\n\r\n', 1)
-
+        #print("content = " + str(split[1]))
         headers = split[0].split(b'\r\n')
         b_part.content = split[1]
 
@@ -114,7 +119,7 @@ def test1():
     multi = parse_multipart(request)
 
     assert multi.parts.__len__() == 2
-    assert multi.boundary == "------WebKitFormBoundarycriD3u6M0UuPR1ia"
+    assert multi.boundary == "----WebKitFormBoundarycriD3u6M0UuPR1ia"
 
     assert multi.parts[0].name == "commenter"
     assert 'Content-Disposition' in multi.parts[0].headers
@@ -123,6 +128,7 @@ def test1():
 
     assert multi.parts[1].name == "upload"
     assert 'Content-Disposition' in multi.parts[1].headers
+    #print(multi.parts[1].content)
     assert multi.parts[1].content == b'<bytes_of_the_file>'
     #print(multi.parts[1].headers)
 
@@ -133,7 +139,7 @@ def test2():
     multi = parse_multipart(request)
 
     assert multi.parts.__len__() == 2
-    assert multi.boundary == "------WebKitFormBoundarycriD3u6M0UuPR1ia"
+    assert multi.boundary == "----WebKitFormBoundarycriD3u6M0UuPR1ia"
 
     assert multi.parts[0].name == "commenter"
     assert 'Content-Disposition' in multi.parts[0].headers
@@ -145,7 +151,43 @@ def test2():
     assert multi.parts[1].content == b'\r\n<bytes_of_the_file>\r\n\r\n'
     #print(multi.parts[1].headers)
 
+# b'POST /form-path HTTP/1.1\r\nContent-Length: 10000\r\nContent-Type: multipart/form-data; boundary=----thisboundary\r\n\r\n------thisboundary\r\nContent-Disposition: form-data; name="commenter"\r\n\r\nJesse\r\n------thisboundary\r\nContent-Disposition: form-data; name="upload"; filename="cat.png"\r\nContent-Type: image/png\r\n\r\n<bytes_of_file>\r\n------thisboundary--'
+
+def test3():
+    request = Request(
+        b'POST /form-path HTTP/1.1\r\nContent-Length: 10000\r\nContent-Type: multipart/form-data; boundary=----thisboundary\r\n\r\n------thisboundary\r\nContent-Disposition: form-data; name="commenter"\r\n\r\nJesse\r\n------thisboundary\r\nContent-Disposition: form-data; name="upload"; filename="cat.png"\r\nContent-Type: image/png\r\n\r\n<bytes_of_file>\r\n------thisboundary--'
+    )
+    multi = parse_multipart(request)
+
+    assert multi.parts.__len__() == 2
+    assert multi.boundary == "----thisboundary"
+
+    assert multi.parts[0].name == "commenter"
+    assert 'Content-Disposition' in multi.parts[0].headers
+    assert multi.parts[0].content == b'Jesse'
+    #print(multi.parts[0].headers)
+
+    assert multi.parts[1].name == "upload"
+    assert 'Content-Disposition' in multi.parts[1].headers
+    #print(multi.parts[1].content)
+    assert multi.parts[1].content == b'<bytes_of_file>'
+    #print(multi.parts[1].headers)
+
+def test4():
+    request = Request(
+        b'POST /form-path HTTP/1.1/r/nContent-Length: 9937\r\nContent-Type: multipart/form-data; boundary=----WebKitFormBoundarycriD3u6M0UuPR1ia\r\n\r\n------WebKitFormBoundarycriD3u6M0UuPR1ia\r\nContent-Disposition: form-data; name="commenter"\r\n\r\nJesse\r\n------WebKitFormBoundarycriD3u6M0UuPR1ia--\r\n')
+    multi = parse_multipart(request)
+
+    assert multi.parts.__len__() == 1
+    assert multi.boundary == "----WebKitFormBoundarycriD3u6M0UuPR1ia"
+
+    assert multi.parts[0].name == "commenter"
+    assert 'Content-Disposition' in multi.parts[0].headers
+    assert multi.parts[0].content == b'Jesse'
+    #print(multi.parts[0].headers)
 
 if __name__ == "__main__":
     test1()
     test2()
+    test3()
+    test4()
