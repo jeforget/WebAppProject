@@ -165,7 +165,7 @@ def test3():
     assert multi.parts[0].name == "commenter"
     assert 'Content-Disposition' in multi.parts[0].headers
     assert multi.parts[0].content == b'Jesse'
-    #print(multi.parts[0].headers)
+    #print(multi.parts[1].headers)
 
     assert multi.parts[1].name == "upload"
     assert 'Content-Disposition' in multi.parts[1].headers

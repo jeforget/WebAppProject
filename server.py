@@ -50,7 +50,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
 
             # Remake the request with the rest of the bytes added
-            print(cumulative_data)
+            #print(cumulative_data)
             request = Request(cumulative_data)
 
         send_me = self.router.route_request(request)

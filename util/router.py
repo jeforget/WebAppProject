@@ -10,10 +10,10 @@ import string
 import secrets
 from hashlib import sha256
 
+
 # This is pretty much doing exactly what handle_post_chat is doing.
 # Should I have made a single function that I could call for both? Yes. However, I did not.
 def send_img_to_db(request: Request, html: str):
-
     # Connect to the db
     mongo_client = MongoClient("mongo")
     db = mongo_client["cse312"]
@@ -42,8 +42,8 @@ def send_img_to_db(request: Request, html: str):
             # tok = message_data.get("token", "NONE")
 
             # print("b = " + str(tok))
-            #if x_token != tok:
-                # 403
+            # if x_token != tok:
+            # 403
             #    return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
 
             chat_collection.insert_one({"message": html, "username": username, "id": uid.__str__()})
@@ -53,34 +53,48 @@ def send_img_to_db(request: Request, html: str):
     # print("POSTED AS: guest")
     return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
 
-def handle_post_image(request: Request):
 
+def handle_post_image(request: Request):
     # Start by giving this request to multipart for parsing
     multi_request = util.multipart.parse_multipart(request)
 
     # Bytes of the image
     image = b''
+    file_type = ""
     for part in multi_request.parts:
         if part.name == "upload":
             image = part.content
+            #print("content dip = " + part.headers.get("Content-Disposition", ""))
+            if part.headers.get("Content-Disposition", "").__contains__("jpg"):
+                #print("contains jpg")
+                file_type = "jpg"
+            if part.headers.get("Content-Disposition", "").__contains__("mp4"):
+                #print("conatins mp4")
+                file_type = "mp4"
 
     # Unique id for this image
-    uid = str(uuid.uuid4()) + ".jpg"
-    print("The unique name for this image is " + uid)
+    uid = str(uuid.uuid4())
+    # print("The unique name for this image is " + uid)
 
     # Save this image to disk
 
     with open("public/image/" + uid, "wb") as output_file:
         output_file.write(image)
 
-    #Save <img src=”/public/images/user_upload1” alt=”an image of something” class=”my_image/> to the db as a chat message same as usual
-    html = '<img src="/public/image/NAME" alt="This should not be seen..." class="my_image"/>'
-    html_send = html.replace("NAME", uid)
+    # Save <img src=”/public/images/user_upload1” alt=”an image of something” class=”my_image/> to the db as a chat message same as usual
+    #print("filetype = " + file_type)
+    if file_type == "jpg":
+        html = '<img src="/public/image/NAME" alt="This should not be seen..." class="my_image"/>'
+        html_send = html.replace("NAME", uid)
+    elif file_type == "mp4":
+        html = '<video width="400" controls autoplay muted><source src="/public/image/NAME" type="video/mp4"></video>'
+        html_send = html.replace("NAME", uid)
+    else:
+        html_send = 'file type not supported!'
 
     send_img_to_db(request, html_send)
 
     return three_o_two()
-
 
 
 def handle_logout(request: Request):
@@ -307,11 +321,14 @@ def handle_img(request: Request):
     path = request.path
     to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: image/jpeg\r\nContent-Length: LEN\r\n\r\n"
 
+    # Since I don't have any "/"s in my file names, this should be safe to do
     paths = path.split("/")
     file_name = tail(paths)
-    n_path = "public/image/" + file_name.replace("/", " ")
+    # On the off chance that splitting on "/" doesn't protect me, I'm also replacing all "/"s.
+    n_path = "public/image/" + file_name .replace("/", "")
 
-    print("n_path = " + n_path)
+
+    #print("n_path = " + n_path)
 
     with open(n_path, "rb") as f:
         data = f.read()
@@ -373,11 +390,11 @@ def handle_post_chat(request: Request):
                 # since the user is authenticated, check for x_token next
                 x_token = user_stuff['token']
 
-            # body = {"message":"test","token":"@VJCeuau!6S*h&5AxzHm"}
+                # body = {"message":"test","token":"@VJCeuau!6S*h&5AxzHm"}
 
-                tok = message_data.get("token","NONE")
+                tok = message_data.get("token", "NONE")
 
-                #print("b = " + str(tok))
+                # print("b = " + str(tok))
                 if x_token != tok:
                     # 403
                     return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
@@ -442,7 +459,7 @@ def handle_login(request: Request):
 
     # if the list is not empty:
     if data.__len__() > 0:
-        #print("data = " + str(data[0]))
+        # print("data = " + str(data[0]))
         # there should only be 1 user with this name...
         entry_one = data[0]
         username = entry_one['username']
