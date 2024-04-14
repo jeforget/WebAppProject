@@ -38,13 +38,6 @@ def send_img_to_db(request: Request, html: str):
             # since the user is authenticated, check for x_token next
             x_token = user_stuff['token']
 
-            # I'll get beck to this later
-            # tok = message_data.get("token", "NONE")
-
-            # print("b = " + str(tok))
-            # if x_token != tok:
-            # 403
-            #    return "HTTP/1.1 403 Forbidden\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
 
             chat_collection.insert_one({"message": html, "username": username, "id": uid.__str__()})
             return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
@@ -389,8 +382,6 @@ def handle_post_chat(request: Request):
 
                 # since the user is authenticated, check for x_token next
                 x_token = user_stuff['token']
-
-                # body = {"message":"test","token":"@VJCeuau!6S*h&5AxzHm"}
 
                 tok = message_data.get("token", "NONE")
 
