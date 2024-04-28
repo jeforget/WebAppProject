@@ -1,7 +1,6 @@
 import base64
 import hashlib
 
-
 def compute_accept(key):
     magic_number = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
     concat_key = (key + magic_number).encode()
@@ -40,12 +39,12 @@ def parse_ws_frame(frame):
 
     if masking_bit != 0:
         for index in range(len(payload)):  # starts at 0, goes to len - 1
-            print("index = " + str(index))
+            #print("index = " + str(index))
             mask_index = (index + 1) % 4
             if mask_index == 0:
                 mask_index = 4
             mask_index -= 1
-            print("mask index = " + str(mask_index))
+            #print("mask index = " + str(mask_index))
             payload[index] = payload[index] ^ mask[mask_index]
 
     output.payload = bytes(payload)

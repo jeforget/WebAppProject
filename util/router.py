@@ -8,7 +8,91 @@ import util.auth
 import bcrypt
 import string
 import secrets
+import util.websockets
 from hashlib import sha256
+
+
+def extract_ws_stuff(frame: bytes):
+    ws = util.websockets.parse_ws_frame(frame)
+    return ws
+def extract_username(request: Request):
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+
+    token = request.cookies.get('auth', "none")
+
+    if token != "none":
+        user_data = db["user_data"]
+
+        n_hash = sha256(token.encode()).digest()
+
+        data = list(user_data.find({"auth": n_hash}))
+        if data.__len__() > 0:
+            user_stuff = data[0]
+            username = user_stuff['username']
+            return username
+
+    return "Guest"
+
+
+def extract_token(request: Request):
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+
+    token = request.cookies.get('auth', "none")
+
+    return token
+
+
+# Handles dealing with my ws messages; pretty much the ws version of handle_post_message
+def handle_ws_message(payload: bytes, token):
+    mongo_client = MongoClient("mongo")
+    db = mongo_client["cse312"]
+    chat_collection = db["chat"]
+
+    # process the body
+    message_data = json.loads(payload)
+    mesg = message_data.get("message")
+    escp_msg = escape(mesg)
+    uid = uuid.uuid4()
+
+    if token != "none":
+        user_data = db["user_data"]
+
+        n_hash = sha256(token.encode()).digest()
+
+        data = list(user_data.find({"auth": n_hash}))
+        # print("DATA = " + str(data))
+        if data.__len__() > 0:
+            user_stuff = data[0]
+            username = user_stuff['username']
+            # print("POSTED AS: " + username)
+
+            chat_collection.insert_one({"message": escp_msg, "username": username, "id": uid.__str__()})
+            payload = {'messageType': 'chatMessage', 'username': username, 'message': escp_msg, 'id': uid.__str__()}
+            ws_frame = util.websockets.generate_ws_frame(json.dumps(payload).encode())
+
+            return ws_frame
+    chat_collection.insert_one({"message": escp_msg, "username": "Guest", "id": uid.__str__()})
+    payload = {'messageType': 'chatMessage', 'username': "Guest", 'message': escp_msg, 'id': uid.__str__()}
+    ws_frame = util.websockets.generate_ws_frame(json.dumps(payload).encode())
+    return ws_frame
+
+# When it wants to use websockets it will send a GET request with the Connection: Upgrade and Upgrade: websocket and Sec-Webocket-Accept: string
+# Nvm he said we can just assume
+# Check the sting, respond with 101 Switching protocols
+
+#handle the websocket handshake
+def handle_handshake(request: Request):
+    # do handshake
+    key = request.headers.get("Sec-WebSocket-Key", "None")
+
+    accept_key = util.websockets.compute_accept(key)
+
+    send_me = "HTTP/1.1 101 Switching Protocols\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: " + accept_key + "\r\n\r\n"
+
+    # send response
+    return send_me.encode()
 
 
 # This is pretty much doing exactly what handle_post_chat is doing.
@@ -170,6 +254,7 @@ def handle_delete_chat(request: Request):
 
 
 def handle_get_chat(req: Request):
+    print("handling get chat...")
     to_send = "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Type: application/json\r\nContent-Length: LEN\r\n\r\n"
     # taken right from the slides
     mongo_client = MongoClient("mongo")
@@ -177,6 +262,9 @@ def handle_get_chat(req: Request):
     chat_collection = db["chat"]
     # , {"_id": 0}
     all_data = list(chat_collection.find({}, {"_id": 0}))
+    print("all data = ")
+    print(all_data)
+    print("________________")
     # print(all_data)
     json_data = json.dumps(all_data)
     e_json = json_data.encode()
@@ -518,6 +606,7 @@ class Router:
         self.add_route("DELETE", "^/chat-messages", handle_delete_chat)
         self.add_route("POST", "^/logout$", handle_logout)
         self.add_route("POST", "^/form-path$", handle_post_image)
+        self.add_route("GET", "^/websocket$", handle_handshake)
 
     def add_route(self, method: str, path: str, func):
         # Simply add the route to the list as a tuple in the form (Method, Path, Function)
