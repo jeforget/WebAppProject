@@ -15,6 +15,8 @@ from hashlib import sha256
 def extract_ws_stuff(frame: bytes):
     ws = util.websockets.parse_ws_frame(frame)
     return ws
+
+
 def extract_username(request: Request):
     mongo_client = MongoClient("mongo")
     db = mongo_client["cse312"]
@@ -78,6 +80,7 @@ def handle_ws_message(payload: bytes, token):
     ws_frame = util.websockets.generate_ws_frame(json.dumps(payload).encode())
     return ws_frame
 
+
 # When it wants to use websockets it will send a GET request with the Connection: Upgrade and Upgrade: websocket and Sec-Webocket-Accept: string
 # Nvm he said we can just assume
 # Check the sting, respond with 101 Switching protocols
@@ -121,7 +124,6 @@ def send_img_to_db(request: Request, html: str):
 
             # since the user is authenticated, check for x_token next
             x_token = user_stuff['token']
-
 
             chat_collection.insert_one({"message": html, "username": username, "id": uid.__str__()})
             return "HTTP/1.1 200 OK\r\nX-Content-Type-Options: nosniff\r\nContent-Length: 0\r\n\r\n".encode()
@@ -406,8 +408,7 @@ def handle_img(request: Request):
     paths = path.split("/")
     file_name = tail(paths)
     # On the off chance that splitting on "/" doesn't protect me, I'm also replacing all "/"s.
-    n_path = "public/image/" + file_name .replace("/", "")
-
+    n_path = "public/image/" + file_name.replace("/", "")
 
     #print("n_path = " + n_path)
 

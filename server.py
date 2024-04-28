@@ -13,7 +13,6 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     # This function gets called after sending a response to a websocket, so after th sendall
     # Once in the loop, calls to .recv are assumed to be socket frames
     # Use sendall for sending frames over the connection
-    #
 
     def handle(self):
         received_data = self.request.recv(2048)
@@ -68,84 +67,102 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             # loopin time
             print("handshake successful, time to buffer!")
 
-            received_data = b''
-
             working_frame = bytearray()
             was_zero = False
 
             while True:
-                if len(received_data) == 0:
-                    received_data = self.request.recv(2048)
-                    #rec_data = rec_data[4:]
+
+                received_data = self.request.recv(2)
+
                 if len(received_data) > 0:
                     print("--- received data ---")
                     print(received_data)
                     print("--- end of data ---\n\n")
 
-                    ws_frame = util.router.extract_ws_stuff(received_data)
-                    print("fin bit = " + str(ws_frame.fin_bit))
-                    print("opcode = " + str(ws_frame.opcode))
+                    fin_bit = (received_data[0] & 0b10000000) >> 7  # 0 >> 7 = 0, 128 (256?) >> 7 = 1
+                    print("fin_bit = " + str(fin_bit))
+                    opcode = (received_data[0] & 0b00001111)
+                    print("opcode = " + str(opcode))
 
-                    if ws_frame.fin_bit == 0 or was_zero:
-                        # Buffer?
-                        if len(ws_frame.payload) < ws_frame.payload_length:
-                            payload = buffer_ws(ws_frame, self)
-                            working_frame.extend(payload)
-                        else:
-                            working_frame.extend(ws_frame.payload)
+                    masking_bit = received_data[1] & 0b10000000  # either 0 or 128
+                    print("masking bit = " + str(masking_bit))
+                    pl = received_data[1] & 0b01111111
 
-                        if ws_frame.fin_bit == 0:
-                            was_zero = True
-                        else:
-                            was_zero = False
-                            send_me = util.router.handle_ws_message(working_frame, token)
-                            self.request.sendall(send_me)
-                            working_frame = bytearray()
+                    if pl == 126:
+                        print("== 126")
+                        received_data = self.request.recv(2)
+                        payload_length = int.from_bytes(received_data, byteorder="big")
+
+                    elif pl == 127:
+                        print("== 127")
+                        received_data = self.request.recv(8)
+                        payload_length = int.from_bytes(received_data, byteorder="big")  # 2 -> 10 is 8 bytes
                     else:
-                        # Buffer?
-                        if len(ws_frame.payload) < ws_frame.payload_length:
-                            (payload, received_data) = buffer_ws(ws_frame, self)
+                        print("<126")
+                        payload_length = pl
 
-                            send_me = util.router.handle_ws_message(payload, token)
-                            self.request.sendall(send_me)
-                        else:
-                            send_me = util.router.handle_ws_message(ws_frame.payload, token)
-                            self.request.sendall(send_me)
-                            received_data = received_data[ws_frame.payload_length:]
+                    # if the masking bit is not 0, the next 4 bytes are the masking bits
+                    if masking_bit != 0:
+                        print("mask != 0")
+                        received_data = self.request.recv(4)
+                        mask = received_data
+
+                    working_load = bytearray()
+
+                    # need to figure out if i need to buffer or not
+                    # if i need to buffer, jump into a loop where if the required payload len is > 2048
+                    # i grab 2048 and continue buffering,
+                    # but if it's less than 2048 i just grab that amount
+                    # I can avoid dipping into the wrong bytes this way
+                    # The while loop I probably wanna have as the current accumulated len < total len
+                    # have an accumulator for the bytes outside the loop
+                    if payload_length > 2048:
+                        print("--- payload length exceeds 2048 ---")
+                        remaining = payload_length
+                        while len(working_load) < payload_length:
+
+                            # If i need more than 2048 grab 2048 and keep buffering
+                            if remaining >= 2048:
+                                print("--- remaining length requires >= 2048 ---")
+                                received_data = self.request.recv(2048)
+                                working_load.extend(received_data)
+                                remaining -= 2048
+                            # Else just grab what I need and add that
+                            else:
+                                print("--- remaining length requires < 2048 ---")
+                                received_data = self.request.recv(remaining)
+                                working_load.extend(received_data)
+                                remaining -= len(received_data)
+
+                    # if buffering isn't needed, just grab payload len bytes from the socket.
+                    else:
+                        print("buffering not needed")
+                        received_data = self.request.recv(payload_length)
+                        working_load.extend(received_data)
+
+                    # AFTER i buffer i can mask and then go from there
+                    if masking_bit != 0:
+                        print("masking the payload...")
+                        for index in range(len(working_load)):  # starts at 0, goes to len - 1
+                            # print("index = " + str(index))
+                            mask_index = (index + 1) % 4
+                            if mask_index == 0:
+                                mask_index = 4
+                            mask_index -= 1
+                            # print("mask index = " + str(mask_index))
+                            working_load[index] = working_load[index] ^ mask[mask_index]
+
+                    print("generating response")
+                    send = util.router.handle_ws_message(working_load, token)
+
+                    print("sending")
+                    self.request.sendall(send)
+                    print("sent")
+
         else:
             send_me = self.router.route_request(request)
             self.request.sendall(send_me)
 
-
-# Helper function that just buffers and builds up a payload.
-# Given a util.websockets.Frame and returns a payload to be sent.
-def buffer_ws(ws: util.websockets.Frame, self: MyTCPHandler):
-    # Set an accumulator
-    total_len = ws.payload_length
-    c_len = len(ws.payload)
-
-    received_data = b''
-    new_ws = util.websockets.Frame()
-
-    # The cumulative data
-    cumulative_data = bytearray(ws.payload)
-    # While the accumulator is less than the total, buffer
-    while c_len < int(total_len):
-        received_data = self.request.recv(2048)
-        new_ws = util.websockets.parse_ws_frame(received_data)
-        print(self.client_address)
-        print("--- received data ---")
-        print(received_data)
-        print("--- end of data ---\n\n")
-
-        # Append the new data to the byte array
-        cumulative_data.extend(new_ws.payload)
-        c_len += len(new_ws.payload)
-
-    if len(received_data) > len(new_ws.payload):
-        received_data = b''
-
-    return cumulative_data, received_data
 
 def main():
     host = "0.0.0.0"
@@ -155,3 +172,11 @@ def main():
     socketserver.TCPServer.allow_reuse_address = True
 
     server = socketserver.ThreadingTCPServer((host, port), MyTCPHandler)
+
+    print("Listening on port " + str(port))
+
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
