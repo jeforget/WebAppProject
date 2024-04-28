@@ -4,6 +4,9 @@ from util.router import Router
 from util.request import Request
 import util.router
 
+test = []
+userlist = []
+
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
     router = Router()
@@ -16,10 +19,11 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         received_data = self.request.recv(2048)
+
         print(self.client_address)
-        print("--- received data ---")
-        print(received_data)
-        print("--- end of data ---\n\n")
+        # print("--- received data ---")
+        # print(received_data)
+        # print("--- end of data ---\n\n")
         request = Request(received_data)
 
         # Image stuff
@@ -54,7 +58,16 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         # websocket stuff
         if request.path == "/websocket":
             # compute and send the handshake
-            userlist = []
+
+            print("--- TEST ---")
+            global test
+            print("new connection")
+            if not test.__contains__(self):
+                test.append(self)
+            print("test now = " + str(test))
+            print("--- TEST ---")
+
+            global userlist
 
             token = util.router.extract_token(request)
             username = util.router.extract_username(request)
@@ -75,9 +88,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 received_data = self.request.recv(2)
 
                 if len(received_data) > 0:
-                    print("--- received data ---")
-                    print(received_data)
-                    print("--- end of data ---\n\n")
+                    # print("--- received data ---")
+                    # print(received_data)
+                    # print("--- end of data ---\n\n")
 
                     fin_bit = (received_data[0] & 0b10000000) >> 7  # 0 >> 7 = 0, 128 (256?) >> 7 = 1
                     print("fin_bit = " + str(fin_bit))
@@ -119,20 +132,34 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                     if payload_length > 2048:
                         print("--- payload length exceeds 2048 ---")
                         remaining = payload_length
-                        while len(working_load) < payload_length:
+                        print("payload_len = " + str(payload_length))
+                        print("remaining = " + str(remaining))
+                        print("working_load = " + str(working_load))
+                        print("--- before loop ---")
 
+                        while len(working_load) < payload_length:
                             # If i need more than 2048 grab 2048 and keep buffering
                             if remaining >= 2048:
                                 print("--- remaining length requires >= 2048 ---")
+                                print("remaining before = " + str(remaining))
+                                print("working_load before = " + str(len(working_load)))
                                 received_data = self.request.recv(2048)
                                 working_load.extend(received_data)
-                                remaining -= 2048
+                                print("received " + str(len(received_data)) + " bytes")
+                                remaining -= len(received_data)
+                                print("remaining now = " + str(remaining))
+                                print("working_load now = " + str(len(working_load)))
                             # Else just grab what I need and add that
                             else:
                                 print("--- remaining length requires < 2048 ---")
+                                print("remaining before = " + str(remaining))
+                                print("working_load before = " + str(len(working_load)))
                                 received_data = self.request.recv(remaining)
+                                print("received " + str(len(received_data)) + " bytes")
                                 working_load.extend(received_data)
                                 remaining -= len(received_data)
+                                print("remaining now = " + str(remaining))
+                                print("working_load now = " + str(len(working_load)))
 
                     # if buffering isn't needed, just grab payload len bytes from the socket.
                     else:
@@ -152,12 +179,47 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                             # print("mask index = " + str(mask_index))
                             working_load[index] = working_load[index] ^ mask[mask_index]
 
-                    print("generating response")
-                    send = util.router.handle_ws_message(working_load, token)
+                    if fin_bit == 0 or was_zero:
+                        print("continuation frame")
+                        working_frame.extend(working_load)
 
-                    print("sending")
-                    self.request.sendall(send)
-                    print("sent")
+                        if fin_bit == 0:
+                            was_zero = True
+                        else:
+                            was_zero = False
+                            print("generating response")
+                            send = util.router.handle_ws_message(working_frame, token)
+                            print("sending")
+                            print("test = " + str(test))
+                            for s in test:
+                                try:
+                                    s.request.sendall(send)
+                                except:
+                                    continue
+
+                            print("sent")
+
+                            working_frame = bytearray()
+
+                            # if opcode == 8:
+                            #     break
+                    else:
+                        print("generating response")
+                        send = util.router.handle_ws_message(working_load, token)
+                        print("sending")
+                        print("test = " + str(test))
+                        for s in test:
+                            try:
+                                s.request.sendall(send)
+                            except:
+                                continue
+
+                        working_load = bytearray()
+
+                        print("sent")
+
+                        # if opcode == 8:
+                        #     break
 
         else:
             send_me = self.router.route_request(request)
