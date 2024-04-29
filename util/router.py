@@ -38,8 +38,6 @@ def extract_username(request: Request):
 
 
 def extract_token(request: Request):
-    mongo_client = MongoClient("mongo")
-    db = mongo_client["cse312"]
 
     token = request.cookies.get('auth', "none")
 
@@ -264,8 +262,8 @@ def handle_get_chat(req: Request):
     chat_collection = db["chat"]
     # , {"_id": 0}
     all_data = list(chat_collection.find({}, {"_id": 0}))
-    # print("all data = ")
-    # print(all_data)
+    print("all data = ")
+    print(all_data)
     # print("________________")
     # print(all_data)
     json_data = json.dumps(all_data)
@@ -608,7 +606,6 @@ class Router:
         self.add_route("POST", "^/logout$", handle_logout)
         self.add_route("POST", "^/form-path$", handle_post_image)
         self.add_route("GET", "^/websocket$", handle_handshake)
-
     def add_route(self, method: str, path: str, func):
         # Simply add the route to the list as a tuple in the form (Method, Path, Function)
         self.routes.append((method, path, func))

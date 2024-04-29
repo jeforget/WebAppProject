@@ -38,8 +38,21 @@ function chatMessageHTML(messageJSON) {
     return messageHTML;
 }
 
+function usersHTML(messageJSON) {
+    const users = messageJSON.username;
+    let messageHTML = "<a>" + users + "</a><br>";
+    return messageHTML;
+}
+
+
+
 function clearChat() {
     const chatMessages = document.getElementById("chat-messages");
+    chatMessages.innerHTML = "";
+}
+
+function clearlist() {
+    const chatMessages = document.getElementById("users");
     chatMessages.innerHTML = "";
 }
 
@@ -48,6 +61,11 @@ function addMessageToChat(messageJSON) {
     chatMessages.innerHTML += chatMessageHTML(messageJSON);
     chatMessages.scrollIntoView(false);
     chatMessages.scrollTop = chatMessages.scrollHeight - chatMessages.clientHeight;
+}
+
+function adduser(messageJSON) {
+    const users = document.getElementById("users");
+    users.innerHTML += usersHTML(messageJSON);
 }
 
 function sendChat() {
@@ -87,6 +105,21 @@ function updateChat() {
     request.send();
 }
 
+function updateuserlist() {
+    const request = new XMLHttpRequest();
+    request.onreadystatechange = function () {
+        if (this.readyState === 4 && this.status === 200) {
+            clearlist();
+            const messages = JSON.parse(this.response);
+            for (const message of messages) {
+                adduser(message);
+            }
+        }
+    }
+    request.open("GET", "/users");
+    request.send();
+}
+
 function welcome() {
     document.addEventListener("keypress", function (event) {
         if (event.code === "Enter") {
@@ -102,6 +135,7 @@ function welcome() {
 
     if (ws) {
         initWS();
+        setInterval(updateuserlist, 2500);
     } else {
         const videoElem = document.getElementsByClassName('video-chat')[0];
         videoElem.parentElement.removeChild(videoElem);
