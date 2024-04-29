@@ -194,7 +194,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
                     # AFTER i buffer i can mask and then go from there
                     if masking_bit != 0:
-                        print("masking the payload...")
+                        #print("masking the payload...")
                         for index in range(len(working_load)):  # starts at 0, goes to len - 1
                             # print("index = " + str(index))
                             mask_index = (index + 1) % 4

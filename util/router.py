@@ -563,7 +563,7 @@ def handle_login(request: Request):
             len = 20
             chars = string.ascii_letters + string.digits + '!@#$%^&*()'
             token = ''.join(secrets.choice(chars) for i in range(len))
-            cookie = 'Set-Cookie: auth=' + token + ';Max-Age=3600; HttpOnly'
+            cookie = 'Set-Cookie: auth=' + token + ';Max-Age=3600; HttpOnly; Secure'
 
             # Hash the auth token for storage
             hash_token = sha256(token.encode()).digest()
